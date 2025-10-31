@@ -112,37 +112,39 @@ export default function TeamMembersManager({ teamId, isCoach }) {
     <div className="mt-4">
       <h3 className="text-lg font-semibold mb-2">Team Members</h3>
       {isCoach && (
-        <form onSubmit={handleAdd} className="flex flex-col md:flex-row gap-2 mb-4">
-          <input
-            name="email"
-            placeholder="User Email"
-            value={form.email}
-            onChange={handleFormChange}
-            className="border px-2 py-1 rounded"
-            required
-          />
-          <select
-            name="role_on_team"
-            value={form.role_on_team}
-            onChange={handleFormChange}
-            className="border px-2 py-1 rounded"
-          >
-            <option value="player">Player</option>
-            <option value="coach">Coach</option>
-            <option value="assistant">Assistant</option>
-          </select>
-          <input
-            name="jersey_number"
-            placeholder="Jersey #"
-            value={form.jersey_number}
-            onChange={handleFormChange}
-            className="border px-2 py-1 rounded"
-            type="number"
-            min="0"
-          />
+        <form onSubmit={handleAdd} className="flex flex-col gap-2 mb-4">
+          <div className="flex flex-col md:flex-row gap-2">
+            <input
+              name="email"
+              placeholder="User Email"
+              value={form.email}
+              onChange={handleFormChange}
+              className="border px-2 py-1 rounded"
+              required
+            />
+            <select
+              name="role_on_team"
+              value={form.role_on_team}
+              onChange={handleFormChange}
+              className="border px-2 py-1 rounded"
+            >
+              <option value="player">Player</option>
+              <option value="coach">Coach</option>
+              <option value="assistant">Assistant</option>
+            </select>
+            <input
+              name="jersey_number"
+              placeholder="Jersey #"
+              value={form.jersey_number}
+              onChange={handleFormChange}
+              className="border px-2 py-1 rounded"
+              type="number"
+              min="0"
+            />
+          </div>
           <button
             type="submit"
-            className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700"
+            className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700 w-full md:w-auto"
             disabled={formLoading}
           >
             Add

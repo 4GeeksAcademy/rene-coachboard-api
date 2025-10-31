@@ -1,9 +1,13 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from './AuthContext';
+import { supabase } from './supabaseClient';
+
 
 export default function Navbar({ showAbout, setShowAbout }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
 
   return (
     <nav className="w-full bg-white/80 shadow-md py-4 px-8 flex items-center justify-between">
@@ -24,24 +28,35 @@ export default function Navbar({ showAbout, setShowAbout }) {
         <span className="text-2xl font-bold text-blue-700 tracking-tight">CoachBoard</span>
       </div>
       <div className="flex gap-4 items-center">
-        <button
-          className={`px-4 py-1 rounded-full font-semibold transition-all duration-200 shadow-sm bg-gray-100 text-blue-700 hover:bg-blue-50`}
-          onClick={() => { setShowAbout && setShowAbout(false); navigate('/login'); }}
-        >
-          Log In
-        </button>
-        <button
-          className={`px-4 py-1 rounded-full font-semibold transition-all duration-200 shadow-sm bg-gray-100 text-green-700 hover:bg-green-50`}
-          onClick={() => { setShowAbout && setShowAbout(false); navigate('/signup'); }}
-        >
-          Sign Up
-        </button>
-        <button
-          className={`px-4 py-1 rounded-full font-semibold transition-all duration-200 shadow-sm ${showAbout ? 'bg-yellow-400 text-white' : 'bg-gray-100 text-yellow-700 hover:bg-yellow-50'}`}
-          onClick={() => { setShowAbout && setShowAbout(true); if (location.pathname !== '/') navigate('/'); }}
-        >
-          About
-        </button>
+        {!user ? (
+          <>
+            <button
+              className={`px-4 py-1 rounded-full font-semibold transition-all duration-200 shadow-sm bg-gray-100 text-blue-700 hover:bg-blue-50`}
+              onClick={() => { setShowAbout && setShowAbout(false); navigate('/login'); }}
+            >
+              Log In
+            </button>
+            <button
+              className={`px-4 py-1 rounded-full font-semibold transition-all duration-200 shadow-sm bg-gray-100 text-green-700 hover:bg-green-50`}
+              onClick={() => { setShowAbout && setShowAbout(false); navigate('/signup'); }}
+            >
+              Sign Up
+            </button>
+            <button
+              className={`px-4 py-1 rounded-full font-semibold transition-all duration-200 shadow-sm ${showAbout ? 'bg-yellow-400 text-white' : 'bg-gray-100 text-yellow-700 hover:bg-yellow-50'}`}
+              onClick={() => { navigate('/about'); }}
+            >
+              About
+            </button>
+          </>
+        ) : (
+          <button
+            className={`px-4 py-1 rounded-full font-semibold transition-all duration-200 shadow-sm bg-red-600 text-white hover:bg-red-700`}
+            onClick={() => { supabase.auth.signOut(); }}
+          >
+            Sign Out
+          </button>
+        )}
       </div>
     </nav>
   );

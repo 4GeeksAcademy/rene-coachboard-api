@@ -62,13 +62,15 @@ export default function AvailabilityManager({ teamId, user, profile, isCoach }) 
           <button className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700" onClick={() => fetchAvail(filterDate)} disabled={loading}>Filter</button>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="flex flex-col md:flex-row gap-2 mb-2">
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className="border rounded px-2 py-1" required />
-          <select value={status} onChange={e => setStatus(e.target.value)} className="border rounded px-2 py-1">
-            {STATUS_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-          </select>
-          <input type="text" placeholder="Note (optional)" value={note} onChange={e => setNote(e.target.value)} className="border rounded px-2 py-1" />
-          <button type="submit" className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700" disabled={formLoading}>Save</button>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-2 mb-2">
+          <div className="flex flex-col md:flex-row gap-2">
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="border rounded px-2 py-1" required />
+            <select value={status} onChange={e => setStatus(e.target.value)} className="border rounded px-2 py-1">
+              {STATUS_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+            </select>
+            <input type="text" placeholder="Note (optional)" value={note} onChange={e => setNote(e.target.value)} className="border rounded px-2 py-1" />
+          </div>
+          <button type="submit" className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700 w-full md:w-auto" disabled={formLoading}>Save</button>
         </form>
       )}
       {loading ? <div>Loading...</div> : error ? <div className="text-red-500">{error}</div> : (

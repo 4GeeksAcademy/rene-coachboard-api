@@ -3,8 +3,9 @@ import { useState, useRef, useEffect } from 'react';
 import { Stage, Layer, Rect, Circle } from 'react-konva';
 import { Shape, Line } from 'react-konva';
 import React from "react";
+import AnimatedPlayViewer from './AnimatedPlayViewer';
 
-export default function PlayDesigner({ teamId, sport }) {
+export default function PlayDesigner({ teamId, sport, viewOnly = false, userRole }) {
   // Debug: log sport prop
   console.log('PlayDesigner sport prop:', sport, typeof sport);
   // State for sport fallback
@@ -75,6 +76,16 @@ export default function PlayDesigner({ teamId, sport }) {
   const [recordingError, setRecordingError] = useState(null);
   // --- Recording logic overhaul ---
   const [recordedActions, setRecordedActions] = useState([]);
+  // Animation state for review modal
+  const [animationLines, setAnimationLines] = useState([]);
+  const [animationCurrentLine, setAnimationCurrentLine] = useState([]);
+  const [animationPlayers, setAnimationPlayers] = useState(players);
+  const [animationPlaying, setAnimationPlaying] = useState(false);
+  const [animationStep, setAnimationStep] = useState(0);
+  const [dragAnimating, setDragAnimating] = useState(false);
+  const [dragPath, setDragPath] = useState([]);
+  const [dragPlayerId, setDragPlayerId] = useState(null);
+  const [dragIndex, setDragIndex] = useState(0);
 
   // --- Player drag path recording ---
   const [playerDragPaths, setPlayerDragPaths] = useState({});
@@ -209,8 +220,14 @@ export default function PlayDesigner({ teamId, sport }) {
     setSavingRecording(true);
     setRecordingError(null);
     try {
-      // Save recordedLines as diagram_json
-      const diagram_json = JSON.stringify(recordedLines);
+      // Defensive: If no actions, do not save empty play
+      if (!recordedActions || recordedActions.length === 0) {
+        setRecordingError('No actions recorded. Please record a play before saving.');
+        setSavingRecording(false);
+        return;
+      }
+      // Save recordedActions as diagram_json for animation playback
+      const diagram_json = JSON.stringify(recordedActions);
       // Capture preview image
       let preview_image = null;
       if (stageRef.current) {
@@ -282,75 +299,13 @@ export default function PlayDesigner({ teamId, sport }) {
     }
   };
 
-  // --- Animation state for review ---
-  const [animationStep, setAnimationStep] = useState(0);
-  const [animationPlaying, setAnimationPlaying] = useState(false);
-  const [animationPlayers, setAnimationPlayers] = useState(players);
-  const [animationLines, setAnimationLines] = useState([]);
-  const [animationCurrentLine, setAnimationCurrentLine] = useState([]);
-  const [dragAnimating, setDragAnimating] = useState(false);
-  const [dragPath, setDragPath] = useState([]);
-  const [dragPlayerId, setDragPlayerId] = useState(null);
-  const [dragIndex, setDragIndex] = useState(0);
+  // --- Animation state for viewing saved plays ---
+  const [showAnimatedPlay, setShowAnimatedPlay] = useState(false);
+  const [animatedPlay, setAnimatedPlay] = useState(null);
+  const [savedPlayAnimationPlaying, setSavedPlayAnimationPlaying] = useState(false);
 
-  // Animate review of recorded actions
-  useEffect(() => {
-    if (!reviewOpen || !animationPlaying) return;
-    if (dragAnimating) {
-      // Animate player drag path stepwise
-      if (dragIndex < dragPath.length && dragPlayerId !== null) {
-        const pt = dragPath[dragIndex];
-        if (pt && typeof pt.x === 'number' && typeof pt.y === 'number') {
-          setAnimationPlayers(players => players.map(p => p.id === dragPlayerId ? { ...p, x: pt.x, y: pt.y } : p));
-        }
-        setTimeout(() => setDragIndex(idx => idx + 1), 40);
-      } else {
-        setDragAnimating(false);
-        setDragPath([]);
-        setDragPlayerId(null);
-        setDragIndex(0);
-        setAnimationStep(step => step + 1);
-      }
-      return;
-    }
-    if (animationStep >= recordedActions.length) {
-      setAnimationPlaying(false);
-      return;
-    }
-    const action = recordedActions[animationStep];
-    let timeout = 400;
-    if (action.type === 'drawStart') {
-      setAnimationCurrentLine([action.pointer]);
-      timeout = 200;
-    } else if (action.type === 'drawMove') {
-      setAnimationCurrentLine(line => [...line, action.pointer]);
-      timeout = 40;
-    } else if (action.type === 'drawEnd') {
-      setAnimationLines(lines => [...lines, animationCurrentLine]);
-      setAnimationCurrentLine([]);
-      timeout = 200;
-    } else if (action.type === 'playerDragPath' && Array.isArray(action.path) && action.path.length > 1) {
-      setDragAnimating(true);
-      setDragPath(action.path);
-      setDragPlayerId(action.id);
-      setDragIndex(0);
-      return;
-    } else if (action.type === 'playerDragPath') {
-      setAnimationStep(step => step + 1);
-      return;
-    } else if (action.type === 'playerMove') {
-      setAnimationPlayers(players => players.map(p => p.id === action.id ? { ...p, x: action.x, y: action.y } : p));
-      timeout = 300;
-    } else if (action.type === 'erase') {
-      setAnimationLines(lines => lines.filter(line => !line.some(pt => Math.hypot(action.pointer.x - pt.x, action.pointer.y - pt.y) < 20)));
-      timeout = 200;
-    } else if (action.type === 'clear') {
-      setAnimationLines([]);
-      timeout = 200;
-    }
-    const timer = setTimeout(() => setAnimationStep(step => step + 1), timeout);
-    return () => clearTimeout(timer);
-  }, [animationStep, animationPlaying, reviewOpen, dragAnimating, dragIndex, dragPath, dragPlayerId]);
+  // Animate review of recorded actions (local recording only)
+  // Animation for saved plays is handled in AnimatedPlayViewer
 
   // Initial player positions (all 5 circles at the top of the 3-point line)
   const initialPlayers = [
@@ -391,184 +346,84 @@ export default function PlayDesigner({ teamId, sport }) {
   return (
     <div className="mt-8">
       <h2 className="text-xl font-bold mb-2">Play Designer</h2>
-      <div className="mb-2 flex flex-col md:flex-row gap-2 items-center">
-        {/* Play Recording & Erase Controls */}
-        <div className="flex gap-2 items-center">
-          <button
-            className="bg-blue-500 text-white px-4 py-1 rounded hover:bg-blue-700"
-            onClick={handleClearMarkers}
-          >
-            Clear All Lines
-          </button>
-          <button
-            className="bg-purple-500 text-white px-4 py-1 rounded hover:bg-purple-700"
-            onClick={handleResetPlayers}
-          >
-            Reset Player Positions
-          </button>
-          <button
-            className={`px-4 py-1 rounded ${eraseMode ? 'bg-red-700 text-white' : 'bg-gray-200 text-gray-800'} hover:bg-red-600`}
-            onClick={handleToggleErase}
-          >
-            {eraseMode ? 'Erasing...' : 'Erase Mode'}
-          </button>
-          {!isRecording ? (
+      {!viewOnly && (
+        <div className="mb-2 flex flex-col md:flex-row gap-2 items-center">
+          {/* Play Recording & Erase Controls */}
+          <div className="flex gap-2 items-center">
             <button
-              className="bg-green-600 text-white px-4 py-1 rounded hover:bg-green-700"
-              onClick={startRecording}
+              className="bg-blue-500 text-white px-4 py-1 rounded hover:bg-blue-700"
+              onClick={handleClearMarkers}
             >
-              Start Recording
+              Clear All Lines
             </button>
-          ) : (
-            <>
+            <button
+              className="bg-purple-500 text-white px-4 py-1 rounded hover:bg-purple-700"
+              onClick={handleResetPlayers}
+            >
+              Reset Player Positions
+            </button>
+            <button
+              className={`px-4 py-1 rounded ${eraseMode ? 'bg-red-700 text-white' : 'bg-gray-200 text-gray-800'} hover:bg-red-600`}
+              onClick={handleToggleErase}
+            >
+              {eraseMode ? 'Erasing...' : 'Erase Mode'}
+            </button>
+            {!isRecording ? (
               <button
-                className="bg-red-600 text-white px-4 py-1 rounded hover:bg-red-700"
-                onClick={stopRecording}
+                className="bg-green-600 text-white px-4 py-1 rounded hover:bg-green-700"
+                onClick={startRecording}
               >
-                Stop Recording
+                Start Recording
               </button>
-              <button
-                className="bg-yellow-500 text-white px-4 py-1 rounded hover:bg-yellow-600"
-                onClick={() => setReviewOpen(true)}
-              >
-                Review Recording
-              </button>
-              <button
-                className="bg-gray-400 text-white px-4 py-1 rounded hover:bg-gray-500"
-                onClick={() => {
-                  setRecordedActions([]);
-                  setIsRecording(false);
-                  setReviewOpen(false);
-                }}
-              >
-                Discard Recording
-              </button>
-            </>
-          )}
+            ) : (
+              <>
+                <button
+                  className="bg-red-600 text-white px-4 py-1 rounded hover:bg-red-700"
+                  onClick={stopRecording}
+                >
+                  Stop Recording
+                </button>
+                <button
+                  className="bg-yellow-500 text-white px-4 py-1 rounded hover:bg-yellow-600"
+                  onClick={() => setReviewOpen(true)}
+                >
+                  Review Recording
+                </button>
+                <button
+                  className="bg-gray-400 text-white px-4 py-1 rounded hover:bg-gray-500"
+                  onClick={() => {
+                    setRecordedActions([]);
+                    setIsRecording(false);
+                    setReviewOpen(false);
+                  }}
+                >
+                  Discard Recording
+                </button>
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
       {/* Review Recording Modal */}
       {reviewOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" style={{overflowY: 'auto'}}>
           <div className="bg-white rounded shadow-lg p-6 w-[640px] max-h-[90vh] overflow-y-auto relative">
             <h3 className="text-lg font-bold mb-2">Review Recording</h3>
-            <div className="border rounded bg-gray-100 mb-4 flex items-center justify-center" style={{background: 'transparent'}}>
-              <Stage width={600} height={400}>
-                <Layer>
-                  {/* Full PlayDesigner landscape */}
-                  {/* Baseline */}
-                  <Rect x={0} y={380} width={600} height={4} fill="#bbb" />
-                  {/* Sidelines */}
-                  <Rect x={0} y={0} width={4} height={400} fill="#bbb" />
-                  <Rect x={596} y={0} width={4} height={400} fill="#bbb" />
-                  {/* Free throw line */}
-                  <Rect x={180} y={240} width={240} height={4} fill="#bbb" />
-                  {/* Key/Paint box */}
-                  <Rect x={180} y={240} width={240} height={144} fill="#f7e9d4" stroke="#000" strokeWidth={3} />
-                  {/* Hoop (rim) */}
-                  <Circle x={300} y={360} radius={20} stroke="#d32f2f" strokeWidth={4} fill="#fff" />
-                  {/* Backboard */}
-                  <Rect x={260} y={380} width={80} height={6} fill="#333" />
-                  {/* 3-point arc */}
-                  <Shape
-                    sceneFunc={(context, shape) => {
-                      context.beginPath();
-                      context.arc(300, 340, 220, Math.PI, 2*Math.PI, false);
-                      context.moveTo(80, 340);
-                      context.lineTo(80, 528);
-                      context.moveTo(520, 340);
-                      context.lineTo(520, 528);
-                      context.strokeStyle = '#000';
-                      context.lineWidth = 3;
-                      context.stroke();
-                    }}
-                  />
-                  {/* Lane markers */}
-                  {[0,1,2].map(i => (
-                    <Rect key={'left-dash-'+i} x={180-10} y={260 + i*36} width={20} height={4} fill="#bbb" stroke="#000" strokeWidth={2} />
-                  ))}
-                  {[0,1,2].map(i => (
-                    <Rect key={'right-dash-'+i} x={180+240-10} y={260 + i*36} width={20} height={4} fill="#bbb" stroke="#000" strokeWidth={2} />
-                  ))}
-                  {/* Animated marker lines */}
-                  {animationLines.map((line, idx) => (
-                    <Line
-                      key={"anim-line-" + idx}
-                      points={line.flatMap(pt => [pt.x, pt.y])}
-                      stroke="#1976d2"
-                      strokeWidth={4}
-                      lineCap="round"
-                      lineJoin="round"
-                    />
-                  ))}
-                  {/* Animated current drawing line */}
-                  {animationCurrentLine.length > 1 && (
-                    <Line
-                      points={animationCurrentLine.flatMap(pt => [pt.x, pt.y])}
-                      stroke="#1976d2"
-                      strokeWidth={4}
-                      lineCap="round"
-                      lineJoin="round"
-                    />
-                  )}
-                  {/* Animated player drag paths: only show during animationPlaying */}
-                  {animationPlaying && recordedActions.filter(a => a.type === 'playerDragPath').map((action, idx) => (
-                    <Line
-                      key={"anim-player-path-"+idx}
-                      points={action.path.flatMap(pt => [pt.x, pt.y])}
-                      stroke={action.path[0].color}
-                      strokeWidth={3}
-                      lineCap="round"
-                      lineJoin="round"
-                      dash={[8, 8]}
-                    />
-                  ))}
-                  {/* Animated player positions */}
-                  {animationPlayers.map((p, idx) => (
-                    <Circle
-                      key={p.id}
-                      x={p.x}
-                      y={p.y}
-                      radius={20}
-                      fill={p.color}
-                    />
-                  ))}
-                </Layer>
-              </Stage>
-            </div>
-            <div className="flex gap-2 justify-end">
-              <button
-                className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700"
-                onClick={() => { resetAnimation(); setAnimationPlaying(true); }}
-                disabled={animationPlaying}
-              >
-                {animationPlaying ? 'Playing...' : 'Play Animation'}
-              </button>
-              <button
-                className="bg-green-600 text-white px-4 py-1 rounded hover:bg-green-700"
-                onClick={() => setShowNaming(true)}
-                disabled={savingRecording || animationPlaying}
-              >
-                Save Play
-              </button>
-              <button
-                className="bg-red-600 text-white px-4 py-1 rounded hover:bg-red-700"
-                onClick={() => {
-                  setRecordedActions([]);
-                  setIsRecording(false);
-                  setReviewOpen(false);
-                }}
-                disabled={animationPlaying}
-              >
-                Delete
-              </button>
-              <button
-                className="bg-gray-400 text-white px-4 py-1 rounded hover:bg-gray-500"
-                onClick={() => setReviewOpen(false)}
-                disabled={animationPlaying}
-              >
-                Close
-              </button>
+            <div className="border rounded bg-gray-100 mb-4 flex flex-col items-center justify-center" style={{background: 'transparent'}}>
+              {/* Use AnimatedPlayViewer for local review animation before saving, with controls */}
+              <AnimatedPlayViewer
+                actions={recordedActions}
+                play={{}}
+                onClose={() => setReviewOpen(false)}
+                showControls={true}
+                animationPlaying={animationPlaying}
+                resetAnimation={resetAnimation}
+                setAnimationPlaying={setAnimationPlaying}
+                setShowNaming={setShowNaming}
+                savingRecording={savingRecording}
+                setRecordedActions={setRecordedActions}
+                setIsRecording={setIsRecording}
+              />
             </div>
             {/* Play naming/tagging UI appears only after Save Play is clicked */}
             {showNaming && (
@@ -637,150 +492,152 @@ export default function PlayDesigner({ teamId, sport }) {
       </div>
       {/* Main Canvas */}
 
-      <Stage
-        width={600}
-        height={400}
-        className="border rounded bg-white"
-        ref={stageRef}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-      >
-        <Layer>
-          {normalizedSport === 'football' ? (
-            <>
-              {/* American Football Field */}
-              {/* Field background */}
-              <Rect x={0} y={0} width={600} height={400} fill="#228B22" stroke="#fff" strokeWidth={2} />
-              {/* Yard lines every 10 yards (every 40px) */}
-              {[...Array(11)].map((_, i) => (
-                <Rect key={i} x={i*60} y={0} width={2} height={400} fill="#fff" />
-              ))}
-              {/* End zones */}
-              <Rect x={0} y={0} width={60} height={400} fill="#1E90FF" opacity={0.3} />
-              <Rect x={540} y={0} width={60} height={400} fill="#B22222" opacity={0.3} />
-              {/* Hash marks */}
-              {[...Array(10)].map((_, i) => (
-                <Rect key={'hash-top-'+i} x={i*60+30-5} y={80} width={10} height={4} fill="#fff" />
-              ))}
-              {[...Array(10)].map((_, i) => (
-                <Rect key={'hash-bottom-'+i} x={i*60+30-5} y={316} width={10} height={4} fill="#fff" />
-              ))}
-              {/* Marker lines */}
-              {markerLines.map((line, idx) => (
-                <Line
-                  key={"marker-" + idx}
-                  points={line.flatMap(pt => [pt.x, pt.y])}
-                  stroke="#FFD700"
-                  strokeWidth={4}
-                  lineCap="round"
-                  lineJoin="round"
+      {!showAnimatedPlay && (
+        <Stage
+          width={560}
+          height={400}
+          className="border rounded bg-white"
+          ref={stageRef}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+        >
+          <Layer>
+            {normalizedSport === 'football' ? (
+              <>
+                {/* American Football Field */}
+                {/* Field background */}
+                <Rect x={0} y={0} width={600} height={400} fill="#228B22" stroke="#fff" strokeWidth={2} />
+                {/* Yard lines every 10 yards (every 40px) */}
+                {[...Array(11)].map((_, i) => (
+                  <Rect key={i} x={i*60} y={0} width={2} height={400} fill="#fff" />
+                ))}
+                {/* End zones */}
+                <Rect x={0} y={0} width={60} height={400} fill="#1E90FF" opacity={0.3} />
+                <Rect x={540} y={0} width={60} height={400} fill="#B22222" opacity={0.3} />
+                {/* Hash marks */}
+                {[...Array(10)].map((_, i) => (
+                  <Rect key={'hash-top-'+i} x={i*60+30-5} y={80} width={10} height={4} fill="#fff" />
+                ))}
+                {[...Array(10)].map((_, i) => (
+                  <Rect key={'hash-bottom-'+i} x={i*60+30-5} y={316} width={10} height={4} fill="#fff" />
+                ))}
+                {/* Marker lines */}
+                {markerLines.map((line, idx) => (
+                  <Line
+                    key={"marker-" + idx}
+                    points={line.flatMap(pt => [pt.x, pt.y])}
+                    stroke="#FFD700"
+                    strokeWidth={4}
+                    lineCap="round"
+                    lineJoin="round"
+                  />
+                ))}
+                {/* Current drawing line */}
+                {drawing && currentLine.length > 1 && (
+                  <Line
+                    points={currentLine.flatMap(pt => [pt.x, pt.y])}
+                    stroke="#FFD700"
+                    strokeWidth={4}
+                    lineCap="round"
+                    lineJoin="round"
+                  />
+                )}
+                {/* Players */}
+                {players.map((p, idx) => (
+                  <Circle
+                    key={p.id}
+                    x={p.x}
+                    y={p.y}
+                    radius={20}
+                    fill={p.color}
+                    draggable
+                    onDragStart={e => handlePlayerDragStart(idx, e)}
+                    onDragMove={e => handlePlayerDragMove(idx, e)}
+                    onDragEnd={e => handleDrag(idx, e)}
+                  />
+                ))}
+              </>
+            ) : (
+              <>
+                {/* Basketball Half Court (default) */}
+                {/* Baseline */}
+                <Rect x={0} y={380} width={560} height={4} fill="#bbb" />
+                {/* Sidelines */}
+                <Rect x={0} y={0} width={4} height={400} fill="#bbb" />
+                <Rect x={556} y={0} width={4} height={400} fill="#bbb" />
+                {/* Free throw line (more space above hoop) */}
+                <Rect x={180} y={240} width={240} height={4} fill="#bbb" />
+                {/* Key/Paint box: width matches free throw line, top at free throw line, bottom aligned with canvas */}
+                <Rect x={180} y={240} width={240} height={144} fill="#f7e9d4" stroke="#000" strokeWidth={3} />
+                {/* Hoop (rim) at bottom of box, overlapping, lower position */}
+                <Circle x={300} y={360} radius={20} stroke="#d32f2f" strokeWidth={4} fill="#fff" />
+                {/* Backboard directly below rim */}
+                <Rect x={260} y={380} width={80} height={6} fill="#333" />
+                {/* 3-point arc: move further up for more space from box */}
+                <Shape
+                  sceneFunc={(context, shape) => {
+                    context.beginPath();
+                    // Arc
+                    context.arc(300, 340, 220, Math.PI, 2*Math.PI, false);
+                    // Left side line: ends exactly at bottom border (y=384+144=528)
+                    context.moveTo(80, 340);
+                    context.lineTo(80, 528);
+                    // Right side line: ends exactly at bottom border (y=528)
+                    context.moveTo(520, 340);
+                    context.lineTo(520, 528);
+                    context.strokeStyle = '#000';
+                    context.lineWidth = 3;
+                    context.stroke();
+                  }}
                 />
-              ))}
-              {/* Current drawing line */}
-              {drawing && currentLine.length > 1 && (
-                <Line
-                  points={currentLine.flatMap(pt => [pt.x, pt.y])}
-                  stroke="#FFD700"
-                  strokeWidth={4}
-                  lineCap="round"
-                  lineJoin="round"
-                />
-              )}
-              {/* Players */}
-              {players.map((p, idx) => (
-                <Circle
-                  key={p.id}
-                  x={p.x}
-                  y={p.y}
-                  radius={20}
-                  fill={p.color}
-                  draggable
-                  onDragStart={e => handlePlayerDragStart(idx, e)}
-                  onDragMove={e => handlePlayerDragMove(idx, e)}
-                  onDragEnd={e => handleDrag(idx, e)}
-                />
-              ))}
-            </>
-          ) : (
-            <>
-              {/* Basketball Half Court (default) */}
-              {/* Baseline */}
-              <Rect x={0} y={380} width={600} height={4} fill="#bbb" />
-              {/* Sidelines */}
-              <Rect x={0} y={0} width={4} height={400} fill="#bbb" />
-              <Rect x={596} y={0} width={4} height={400} fill="#bbb" />
-              {/* Free throw line (more space above hoop) */}
-              <Rect x={180} y={240} width={240} height={4} fill="#bbb" />
-              {/* Key/Paint box: width matches free throw line, top at free throw line, bottom aligned with canvas */}
-              <Rect x={180} y={240} width={240} height={144} fill="#f7e9d4" stroke="#000" strokeWidth={3} />
-              {/* Hoop (rim) at bottom of box, overlapping, lower position */}
-              <Circle x={300} y={360} radius={20} stroke="#d32f2f" strokeWidth={4} fill="#fff" />
-              {/* Backboard directly below rim */}
-              <Rect x={260} y={380} width={80} height={6} fill="#333" />
-              {/* 3-point arc: move further up for more space from box */}
-              <Shape
-                sceneFunc={(context, shape) => {
-                  context.beginPath();
-                  // Arc
-                  context.arc(300, 340, 220, Math.PI, 2*Math.PI, false);
-                  // Left side line: ends exactly at bottom border (y=384+144=528)
-                  context.moveTo(80, 340);
-                  context.lineTo(80, 528);
-                  // Right side line: ends exactly at bottom border (y=528)
-                  context.moveTo(520, 340);
-                  context.lineTo(520, 528);
-                  context.strokeStyle = '#000';
-                  context.lineWidth = 3;
-                  context.stroke();
-                }}
-              />
-              {/* Lane markers: 3 evenly spaced dashes on each side of the box, black border */}
-              {[0,1,2].map(i => (
-                <Rect key={'left-dash-'+i} x={180-10} y={260 + i*36} width={20} height={4} fill="#bbb" stroke="#000" strokeWidth={2} />
-              ))}
-              {[0,1,2].map(i => (
-                <Rect key={'right-dash-'+i} x={180+240-10} y={260 + i*36} width={20} height={4} fill="#bbb" stroke="#000" strokeWidth={2} />
-              ))}
-              {/* Marker lines */}
-              {markerLines.map((line, idx) => (
-                <Line
-                  key={"marker-" + idx}
-                  points={line.flatMap(pt => [pt.x, pt.y])}
-                  stroke="#1976d2"
-                  strokeWidth={4}
-                  lineCap="round"
-                  lineJoin="round"
-                />
-              ))}
-              {/* Current drawing line */}
-              {drawing && currentLine.length > 1 && (
-                <Line
-                  points={currentLine.flatMap(pt => [pt.x, pt.y])}
-                  stroke="#1976d2"
-                  strokeWidth={4}
-                  lineCap="round"
-                  lineJoin="round"
-                />
-              )}
-              {/* Players */}
-              {players.map((p, idx) => (
-                <Circle
-                  key={p.id}
-                  x={p.x}
-                  y={p.y}
-                  radius={20}
-                  fill={p.color}
-                  draggable
-                  onDragStart={e => handlePlayerDragStart(idx, e)}
-                  onDragMove={e => handlePlayerDragMove(idx, e)}
-                  onDragEnd={e => handleDrag(idx, e)}
-                />
-              ))}
-            </>
-          )}
-        </Layer>
-      </Stage>
+                {/* Lane markers: 3 evenly spaced dashes on each side of the box, black border */}
+                {[0,1,2].map(i => (
+                  <Rect key={'left-dash-'+i} x={180-10} y={260 + i*36} width={20} height={4} fill="#bbb" stroke="#000" strokeWidth={2} />
+                ))}
+                {[0,1,2].map(i => (
+                  <Rect key={'right-dash-'+i} x={180+240-10} y={260 + i*36} width={20} height={4} fill="#bbb" stroke="#000" strokeWidth={2} />
+                ))}
+                {/* Marker lines */}
+                {markerLines.map((line, idx) => (
+                  <Line
+                    key={"marker-" + idx}
+                    points={line.flatMap(pt => [pt.x, pt.y])}
+                    stroke="#1976d2"
+                    strokeWidth={4}
+                    lineCap="round"
+                    lineJoin="round"
+                  />
+                ))}
+                {/* Current drawing line */}
+                {drawing && currentLine.length > 1 && (
+                  <Line
+                    points={currentLine.flatMap(pt => [pt.x, pt.y])}
+                    stroke="#1976d2"
+                    strokeWidth={4}
+                    lineCap="round"
+                    lineJoin="round"
+                  />
+                )}
+                {/* Players */}
+                {players.map((p, idx) => (
+                  <Circle
+                    key={p.id}
+                    x={p.x}
+                    y={p.y}
+                    radius={20}
+                    fill={p.color}
+                    draggable
+                    onDragStart={e => handlePlayerDragStart(idx, e)}
+                    onDragMove={e => handlePlayerDragMove(idx, e)}
+                    onDragEnd={e => handleDrag(idx, e)}
+                  />
+                ))}
+              </>
+            )}
+          </Layer>
+        </Stage>
+      )}
       {/* Saved Plays List */}
       <div className="mt-4">
         <h3 className="font-semibold mb-2">Saved Plays</h3>
@@ -807,7 +664,16 @@ export default function PlayDesigner({ teamId, sport }) {
                     )}
                   </div>
                   <button
-                    className="ml-auto bg-red-500 text-white px-2 py-1 rounded hover:bg-red-700"
+                    className="ml-auto bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-700"
+                    onClick={() => {
+                      setAnimatedPlay(play);
+                      setShowAnimatedPlay(true);
+                    }}
+                  >
+                    View & Animate
+                  </button>
+                  <button
+                    className="ml-2 bg-red-500 text-white px-2 py-1 rounded hover:bg-red-700"
                     onClick={() => handleDelete(play.id)}
                   >
                     Delete
@@ -822,26 +688,62 @@ export default function PlayDesigner({ teamId, sport }) {
           </ul>
         )}
       </div>
-      {/* Preview Modal */}
-      {showPreview && (
+      {/* Animated Play Modal */}
+      {showAnimatedPlay && animatedPlay && (
         <div style={{
           position: "fixed",
           top: 0,
           left: 0,
           width: "100vw",
           height: "100vh",
-          background: "rgba(0,0,0,0.5)",
+          background: "rgba(0,0,0,0.7)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          zIndex: 1000
+          zIndex: 9999
         }}>
-          <div style={{ background: "#fff", padding: 24, borderRadius: 8 }}>
-            <h2>Play Preview</h2>
-            <img src={previewData} alt="Play Preview" style={{ maxWidth: 500, maxHeight: 500 }} />
-            <div style={{ marginTop: 16 }}>
-              <button onClick={() => setShowPreview(false)}>Close</button>
+          <div style={{ position: "relative", background: "#fff", padding: 24, borderRadius: 8, minWidth: 640, boxShadow: "0 8px 32px rgba(0,0,0,0.25)" }}>
+            <button
+              style={{ position: "absolute", top: 16, right: 16, zIndex: 10001 }}
+              className="bg-gray-400 text-white px-4 py-1 rounded hover:bg-gray-500"
+              onClick={() => {
+                setShowAnimatedPlay(false);
+                setAnimatedPlay(null);
+                setSavedPlayAnimationPlaying(false);
+              }}
+            >
+              Close
+            </button>
+            <h2 className="text-lg font-bold mb-2">{animatedPlay.title} Animation</h2>
+            <div className="flex gap-2 mb-4 justify-end">
+              {!savedPlayAnimationPlaying ? (
+                <button
+                  className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700"
+                  onClick={() => setSavedPlayAnimationPlaying(true)}
+                >
+                  Play Animation
+                </button>
+              ) : (
+                <button
+                  className="bg-red-600 text-white px-4 py-1 rounded hover:bg-red-700"
+                  onClick={() => {
+                    setSavedPlayAnimationPlaying(false);
+                  }}
+                >
+                  Stop Animation
+                </button>
+              )}
             </div>
+            <AnimatedPlayViewer
+              play={animatedPlay}
+              onClose={() => {
+                setShowAnimatedPlay(false);
+                setAnimatedPlay(null);
+                setSavedPlayAnimationPlaying(false);
+              }}
+              animationPlaying={savedPlayAnimationPlaying}
+              setAnimationPlaying={setSavedPlayAnimationPlaying}
+            />
           </div>
         </div>
       )}

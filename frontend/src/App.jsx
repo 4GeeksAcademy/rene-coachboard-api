@@ -5,10 +5,12 @@ import Login from './Login';
 import Signup from './Signup';
 import ForgotPassword from './ForgotPassword';
 import LandingPage from './LandingPage';
+import AboutPage from './AboutPage';
 import RoleCaptureModal from './RoleCaptureModal';
 import TeamsDashboard from './TeamsDashboard';
 import TeamsManager from './TeamsManager';
 import PlayerTeamsManager from './PlayerTeamsManager';
+import Navbar from './Navbar';
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
@@ -43,12 +45,18 @@ function App() {
       });
   }, [user]);
 
-  // Force navigation to /teams after login
+  // Redirect after login based on role
   useEffect(() => {
-    if (user && (location.pathname === '/' || location.pathname === '/login')) {
-      navigate('/teams', { replace: true });
+    if (user && profile && (location.pathname === '/' || location.pathname === '/login')) {
+      if (profile.role === 'coach' || profile.role === 'assistant') {
+        navigate('/teams', { replace: true });
+      } else if (profile.role === 'player') {
+        navigate('/player-teams', { replace: true });
+      } else {
+        navigate('/teams', { replace: true }); // fallback
+      }
     }
-  }, [user, location.pathname, navigate]);
+  }, [user, profile, location.pathname, navigate]);
 
   if (loading || profileLoading) {
     return (
@@ -69,25 +77,36 @@ function App() {
   }
 
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-  <Route path="/teams" element={user ? <TeamsManager /> : <Navigate to="/login" />} />
-  <Route path="/player-teams" element={user ? <PlayerTeamsManager /> : <Navigate to="/login" />} />
-      <Route path="/team/:teamId" element={user ? <TeamsDashboard user={user} profile={profile} /> : <Navigate to="/login" />} />
-      <Route
-        path="/"
-        element={
-          !user ? (
-            <LandingPage />
-          ) : (
-            <Navigate to="/teams" />
-          )
-        }
-      />
-      <Route path="*" element={<Navigate to="/" />} />
-    </Routes>
+    <>
+      {/* Always show Navbar except for login/signup/forgot-password */}
+      {!(location.pathname === '/login' || location.pathname === '/signup' || location.pathname === '/forgot-password') && <Navbar />}
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/teams" element={user ? <TeamsManager /> : <Navigate to="/login" />} />
+        <Route path="/player-teams" element={user ? <PlayerTeamsManager /> : <Navigate to="/login" />} />
+        <Route path="/team/:teamId" element={user ? <TeamsDashboard user={user} profile={profile} /> : <Navigate to="/login" />} />
+        <Route path="/about" element={<AboutPage />} />
+        <Route
+          path="/"
+          element={
+            !user ? (
+              <LandingPage />
+            ) : profile ? (
+              profile.role === 'player' ? (
+                <Navigate to="/player-teams" />
+              ) : (
+                <Navigate to="/teams" />
+              )
+            ) : (
+              <div className="flex items-center justify-center min-h-screen">Loading profile...</div>
+            )
+          }
+        />
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    </>
   );
 }
 

@@ -94,34 +94,36 @@ export default function GamesManager({ teamId, isCoach, user }) {
     <div className="mt-4">
       <h3 className="text-lg font-semibold mb-2">Games</h3>
       {isCoach && (
-        <form onSubmit={handleCreate} className="flex flex-col md:flex-row gap-2 mb-4">
-          <input
-            name="opponent"
-            placeholder="Opponent"
-            value={form.opponent}
-            onChange={handleFormChange}
-            className="border px-2 py-1 rounded"
-            required
-          />
-          <input
-            name="date"
-            type="datetime-local"
-            placeholder="Date"
-            value={form.date}
-            onChange={handleFormChange}
-            className="border px-2 py-1 rounded"
-            required
-          />
-          <input
-            name="location"
-            placeholder="Location"
-            value={form.location}
-            onChange={handleFormChange}
-            className="border px-2 py-1 rounded"
-          />
+        <form onSubmit={handleCreate} className="flex flex-col gap-2 mb-4">
+          <div className="flex flex-col md:flex-row gap-2">
+            <input
+              name="opponent"
+              placeholder="Opponent"
+              value={form.opponent}
+              onChange={handleFormChange}
+              className="border px-2 py-1 rounded w-44"
+              required
+            />
+            <input
+              name="date"
+              type="datetime-local"
+              placeholder="Date"
+              value={form.date}
+              onChange={handleFormChange}
+              className="border px-2 py-1 rounded w-44"
+              required
+            />
+            <input
+              name="location"
+              placeholder="Location"
+              value={form.location}
+              onChange={handleFormChange}
+              className="border px-2 py-1 rounded w-44"
+            />
+          </div>
           <button
             type="submit"
-            className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700"
+            className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700 w-full md:w-auto"
             disabled={formLoading}
           >
             Add Game

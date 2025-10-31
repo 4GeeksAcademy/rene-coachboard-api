@@ -29,8 +29,7 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-100 via-white to-green-100 flex flex-col">
-      {/* Navbar */}
-  <Navbar showAbout={showAbout} setShowAbout={setShowAbout} />
+      {/* Navbar removed, now rendered globally in App.jsx */}
       {/* Main Content */}
       {!showAbout ? (
         <main className="flex flex-1 items-center justify-center">

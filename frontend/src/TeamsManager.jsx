@@ -53,16 +53,10 @@ export default function TeamsManager() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-100 via-white to-green-100 flex flex-col">
-      <Navbar />
+      {/* Navbar removed, now rendered globally in App.jsx */}
       <div className="flex flex-1 flex-col items-center justify-start p-8">
         <div className="w-full flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-blue-700">My Teams</h1>
-          <button
-            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-            onClick={() => supabase.auth.signOut()}
-          >
-            Sign Out
-          </button>
         </div>
         <form onSubmit={handleAddTeam} className="flex gap-2 mb-6">
           <input
@@ -81,7 +75,10 @@ export default function TeamsManager() {
           <ul className="w-full max-w-lg space-y-3">
             {teams.map(team => (
               <li key={team.id} className="flex items-center justify-between bg-white/90 rounded-xl shadow p-4 hover:bg-blue-50 transition cursor-pointer">
-                <span onClick={() => navigate(`/team/${team.id}`)} className="font-semibold text-lg text-blue-700 hover:underline">{team.name}</span>
+                <div className="flex flex-col flex-1">
+                  <span onClick={() => navigate(`/team/${team.id}`)} className="font-semibold text-lg text-blue-700 hover:underline">{team.name}</span>
+                  <span className="text-xs text-gray-500">Team Code: <span className="font-mono bg-gray-100 px-2 py-1 rounded">{team.join_code || 'N/A'}</span></span>
+                </div>
                 <button onClick={() => handleDeleteTeam(team.id)} className="ml-4 px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600">Delete</button>
               </li>
             ))}

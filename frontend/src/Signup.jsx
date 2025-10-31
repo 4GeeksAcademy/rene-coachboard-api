@@ -1,10 +1,12 @@
 import Navbar from './Navbar';
 import { useState } from 'react';
+import { supabase } from './supabaseClient';
 
 export default function Signup() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [role, setRole] = useState('player');
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -21,12 +23,12 @@ export default function Signup() {
       setLoading(false);
       return;
     }
-    // Insert full name into profiles
+    // Insert full name and role into profiles
     const userId = data?.user?.id;
     if (userId) {
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({ full_name: fullName, email })
+        .update({ full_name: fullName, email, role })
         .eq('id', userId);
       if (profileError) setError(profileError.message);
     }
@@ -50,6 +52,16 @@ export default function Signup() {
             className="mb-4 w-full px-4 py-2 border border-green-200 rounded focus:outline-none focus:ring-2 focus:ring-green-400"
             required
           />
+          <select
+            value={role}
+            onChange={e => setRole(e.target.value)}
+            className="mb-4 w-full px-4 py-2 border border-green-200 rounded focus:outline-none focus:ring-2 focus:ring-green-400"
+            required
+          >
+            <option value="player">Player</option>
+            <option value="coach">Coach</option>
+            <option value="coach_assistant">Coach Assistant</option>
+          </select>
           <input
             type="email"
             placeholder="Email"

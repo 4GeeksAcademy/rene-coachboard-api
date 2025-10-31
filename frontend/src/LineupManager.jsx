@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 
-export default function LineupManager({ gameId, teamId }) {
+export default function LineupManager({ gameId, teamId, isCoach }) {
   const [members, setMembers] = useState([]);
   const [lineup, setLineup] = useState({}); // { user_id: true/false }
   const [loading, setLoading] = useState(true);
@@ -58,6 +58,8 @@ export default function LineupManager({ gameId, teamId }) {
     setSaving(false);
   };
 
+  // Only coaches can assign starters
+  if (!isCoach) return null;
   return (
     <div className="mt-2">
       <h4 className="font-semibold mb-1">Assign Starters</h4>
